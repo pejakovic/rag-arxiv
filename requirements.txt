@@ -1,7 +1,7 @@
-arxiv
 langchain
-langchain-community
+faiss-cpu
 transformers
-datasets
-accelerate
 torch
+sentence-transformers
+typing-extensions
+python-dotenv

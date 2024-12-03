@@ -165,3 +165,5 @@ cython_debug/
 *.pdf
 dataset.jsonl
 fine_tuned_model/
+faiss_index/
+faiss_index*
