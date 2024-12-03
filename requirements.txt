@@ -1,3 +1,7 @@
 arxiv
 langchain
 langchain-community
+transformers
+datasets
+accelerate
+torch

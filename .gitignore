@@ -164,3 +164,4 @@ cython_debug/
 .arxiv_papers/
 *.pdf
 dataset.jsonl
+fine_tuned_model/
