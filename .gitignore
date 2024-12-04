@@ -161,9 +161,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-.arxiv_papers/
-*.pdf
-dataset.jsonl
-fine_tuned_model/
-faiss_index/
-faiss_index*
+data/
+models/
+logs/
+
+models2/
+logs2/
+data2/

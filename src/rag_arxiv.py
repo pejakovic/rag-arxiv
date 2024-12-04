@@ -6,17 +6,29 @@ from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings, HuggingFacePipeline
 from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer
+from args import parse_rag_args
+from downloader import download_arxiv_papers
+from doc_parser import parse_pdfs_to_chunks
+from finetuner import fine_tune_model
+from embeddings import FAISSDatabase
+from utils import PathManager
+
+# Initialize PathManager
+path_manager = PathManager()
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('rag_system.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+def setup_logging(log_file: str):
+    """Setup logging with absolute path"""
+    log_path = path_manager.get_abs_path(log_file, create_dirs=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(str(log_path)),
+            logging.StreamHandler()
+        ]
+    )
+    return logging.getLogger(__name__)
 
 @dataclass
 class QueryResult:
@@ -27,106 +39,84 @@ class QueryResult:
     error: Optional[str] = None
 
 class RAGSystem:
-    def __init__(self, 
-                 index_file: str = "./faiss_index", 
-                 model_path: str = "./fine_tuned_model",
-                 max_length: int = 1024,
-                 max_new_tokens: int = 512,
-                 temperature: float = 0.7,
-                 top_k: int = 4):
+    def __init__(self, args):
         """
-        Initialize the RAG system with the given parameters.
+        Initialize the RAG system with the given arguments.
 
-        :param index_file: Path to the FAISS index file.
-        :param model_path: Path to the fine-tuned model.
-        :param max_length: Maximum length of the generated text.
-        :param max_new_tokens: Maximum number of new tokens to generate.
-        :param temperature: Sampling temperature for the generated text.
-        :param top_k: Number of top-k tokens to consider for the generated text.
+        :param args: RAGArguments object containing all configuration
         """
-        self.index_file = index_file
-        self.model_path = model_path
-        self.max_length = max_length
-        self.max_new_tokens = max_new_tokens
-        self.temperature = temperature
-        self.top_k = top_k
+        self.args = args
         self.vectorstore = None
         self.llm = None
         self.qa_chain = None
-        logger.info(f"Initialized RAG system with parameters: max_length={max_length}, "
-                   f"max_new_tokens={max_new_tokens}, temperature={temperature}, top_k={top_k}")
+        self.logger = setup_logging(args.log_file)
+        
+        # Log absolute paths
+        self.logger.info(f"Using index file: {args.index_file}")
+        self.logger.info(f"Using model path: {args.model_path}")
+        self.logger.info(
+            f"Initialized RAG system with parameters: max_length={args.max_length}, "
+            f"max_new_tokens={args.max_new_tokens}, temperature={args.temperature}, "
+            f"top_k={args.top_k}"
+        )
 
     def load_components(self):
-        """
-        Load the components of the RAG system.
-        """
+        """Load all necessary components for the RAG system"""
         try:
             # Load FAISS index
-            logger.info("Loading FAISS index...")
+            self.logger.info("Loading FAISS index...")
             hf_embeddings = HuggingFaceEmbeddings(
                 model_name="all-MiniLM-L6-v2",
-                model_kwargs={'device': 'cpu'}
+                # model_kwargs={'device': 'cpu'}
             )
             self.vectorstore = FAISS.load_local(
-                self.index_file, 
+                self.args.index_file, 
                 hf_embeddings, 
                 allow_dangerous_deserialization=True
             )
             
             # Load fine-tuned LLM
-            logger.info("Loading fine-tuned LLM...")
-            model = AutoModelForCausalLM.from_pretrained(self.model_path)
-            tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+            self.logger.info("Loading fine-tuned LLM...")
+            model = AutoModelForCausalLM.from_pretrained(self.args.model_path)
+            tokenizer = AutoTokenizer.from_pretrained(self.args.model_path)
             generation_pipeline = pipeline(
                 "text-generation", 
                 model=model, 
                 tokenizer=tokenizer,
-                max_length=self.max_length,
-                max_new_tokens=self.max_new_tokens,
-                temperature=self.temperature
+                max_length=self.args.max_length,
+                max_new_tokens=self.args.max_new_tokens,
+                temperature=self.args.temperature
             )
             self.llm = HuggingFacePipeline(pipeline=generation_pipeline)
             
             # Build QA chain
-            logger.info("Building RetrievalQA chain...")
+            self.logger.info("Building RetrievalQA chain...")
             self.qa_chain = RetrievalQA.from_chain_type(
                 llm=self.llm,
                 chain_type="stuff",
                 retriever=self.vectorstore.as_retriever(
-                    search_kwargs={"k": self.top_k}
+                    search_kwargs={"k": self.args.top_k}
                 ),
                 return_source_documents=True
             )
-            logger.info("RAG system successfully loaded!")
+            self.logger.info("RAG system successfully loaded!")
             
         except Exception as e:
-            logger.error(f"Error loading RAG components: {str(e)}")
+            self.logger.error(f"Error loading RAG components: {str(e)}")
             raise
 
     def ask_question(self, query: str) -> QueryResult:
-        """
-        Processes a query using the RAG system and returns the result.
-
-        This function checks if the RAG system is properly initialized, processes
-        the given query using the RetrievalQA chain, and returns the response,
-        source documents, and execution time. If an error occurs during processing,
-        it logs the error and returns an error message within the QueryResult.
-
-        :param query: The query string to process.
-        :return: A QueryResult object containing the query, response, source documents,
-                execution time, and any error encountered.
-        :raises ValueError: If the RAG system is not initialized.
-        """
+        """Process a query and return the result"""
         if not self.qa_chain:
             raise ValueError("RAG system not initialized. Call load_components() first.")
             
         start_time = time()
         try:
-            logger.info(f"Processing query: {query}")
-            result = self.qa_chain({"query": query})
+            self.logger.info(f"Processing query: {query}")
+            result = self.qa_chain.invoke({"query": query})
             
             execution_time = time() - start_time
-            logger.info(f"Query processed in {execution_time:.2f} seconds")
+            self.logger.info(f"Query processed in {execution_time:.2f} seconds")
             
             return QueryResult(
                 query=query,
@@ -137,7 +127,7 @@ class RAGSystem:
             
         except Exception as e:
             error_msg = f"Error processing query: {str(e)}"
-            logger.error(error_msg)
+            self.logger.error(error_msg)
             return QueryResult(
                 query=query,
                 response="",
@@ -146,42 +136,83 @@ class RAGSystem:
                 error=error_msg
             )
 
-def main():
-    # Initialize and use the RAG system
-    """
-    Initialize and use the RAG system to ask a question and print the response,
-    source documents, and any errors encountered.
+def initialize_system(args):
+    """Initialize the system by downloading papers and creating the database"""
+    print(f"\nDownloading papers for query: {args.search_query}")
+    download_arxiv_papers(args.search_query, args.papers_dir)
+    print(f"Papers downloaded to: {args.papers_dir}")
 
-    :raises Exception: If an error occurs during main execution.
-    """
-    rag_system = RAGSystem()
+    print("\nParsing PDFs and creating chunks...")
+    parse_pdfs_to_chunks(args.papers_dir, args.dataset_path)
+
+def run_inference(rag_system, args):
+    """Run the system in inference mode"""
+    if args.query:
+        # Single query mode
+        result = rag_system.ask_question(args.query)
+        print_results(result)
+    else:
+        # Interactive mode
+        print("\nEnter your questions (type 'exit' to quit):")
+        while True:
+            query = input("\nQuestion: ").strip()
+            if query.lower() == 'exit':
+                break
+            result = rag_system.ask_question(query)
+            print_results(result)
+
+def print_results(result: QueryResult):
+    """Print query results in a formatted way"""
+    print("\nQuery Results:")
+    print(f"Response: {result.response}")
+    print(f"Execution Time: {result.execution_time:.2f} seconds")
+    
+    if result.error:
+        print(f"Error: {result.error}")
+    
+    if result.source_documents:
+        print("\nSource Documents:")
+        for i, doc in enumerate(result.source_documents, 1):
+            print(f"\n{i}. {doc.metadata.get('title', 'Unknown Title')}")
+            print(f"Content: {doc.page_content[:200]}...")
+
+def main():
+    """Main function to run the RAG system"""
+    args = parse_rag_args()
     
     try:
-        # Step 1: Load Components
-        rag_system.load_components()
-        
-        # Step 2: Ask Questions
-        query = "What is Federated Learning?"
-        result = rag_system.ask_question(query)
-        
-        # Print the Response
-        print("\nQuery Results:")
-        print(f"Query: {result.query}")
-        print(f"Response: {result.response}")
-        print(f"Execution Time: {result.execution_time:.2f} seconds")
-        if result.error:
-            print(f"Error: {result.error}")
-        
-        # Print source documents if available
-        if result.source_documents:
-            print("\nSource Documents:")
-            for i, doc in enumerate(result.source_documents, 1):
-                print(f"\n{i}. {doc.metadata.get('title', 'Unknown Title')}")
-                print(f"Content: {doc.page_content[:200]}...")
-                
+        if args.mode == 'init':
+            initialize_system(args)
+        elif args.mode == 'train':
+            print("\nFine-tuning the model...")
+            fine_tune_model(args.dataset_path, args.model_output_dir)
+            print("\nCreating FAISS database...")
+            db = FAISSDatabase()
+            db.save_to_database(args.dataset_path)
+            print("System initialization complete!")
+        else:  # inference mode
+            rag_system = RAGSystem(args)
+            rag_system.load_components()
+            run_inference(rag_system, args)
+            
     except Exception as e:
+        logger = setup_logging(args.log_file)
         logger.error(f"Main execution error: {str(e)}")
         raise
 
 if __name__ == "__main__":
+    '''
+    # Initialize the system
+    python src/rag_arxiv.py --mode init --search-query "federated learning" --papers-dir "data/papers" --dataset-path "data/dataset.jsonl"
+
+    # Train the model
+    python src/rag_arxiv.py --mode train --dataset-path "data/dataset.jsonl" --model_output_dir "models/fine_tuned"
+
+    # Run inference (single query)
+    python src/rag_arxiv.py --mode inference --query "What is federated learning?"
+
+    # Run inference (interactive mode)
+    python src/rag_arxiv.py --mode inference
+    '''
+
     main()

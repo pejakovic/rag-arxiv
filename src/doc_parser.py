@@ -1,14 +1,10 @@
-import os
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
+
 import json
 
-# Configuration
-INPUT_DIR = ".arxiv_papers"
-OUTPUT_FILE = "./dataset.jsonl"
-
-def parse_pdfs(path: str) -> list[Document]:
+def _parse_pdfs(path: str) -> list[Document]:
     """
     Load PDFs from a given directory using PyPDFDirectoryLoader.
 
@@ -20,7 +16,7 @@ def parse_pdfs(path: str) -> list[Document]:
     documents = pdf_document_loader.load()
     return documents
 
-def split_documents(documents: list[Document]) -> list[Document]:
+def _split_documents(documents: list[Document]) -> list[Document]:
     """
     Split documents into smaller chunks. This is done using a
     RecursiveCharacterTextSplitter, which splits the text into chunks
@@ -46,7 +42,7 @@ def split_documents(documents: list[Document]) -> list[Document]:
     # Split the documents and return the list.
     return text_splitter.split_documents(documents)
 
-def calculate_chunk_ids(chunks: list[Document]) -> list[Document]:
+def _calculate_chunk_ids(chunks: list[Document]) -> list[Document]:
     """
     Calculate the chunk ID for each document.
 
@@ -82,7 +78,7 @@ def calculate_chunk_ids(chunks: list[Document]) -> list[Document]:
 
     return chunks
 
-def save_to_jsonl(documents: list[Document], output_file: str) -> None:
+def _save_to_jsonl(documents: list[Document], output_file: str) -> None:
     """
     Save documents with metadata to a JSONL file.
 
@@ -102,7 +98,15 @@ def save_to_jsonl(documents: list[Document], output_file: str) -> None:
             f.write(json.dumps(entry) + "\n")
     print(f"Saved dataset to: {output_file}")
 
-if __name__ == "__main__":
-    raw_documents = parse_pdfs(INPUT_DIR)
-    chunked_documents = split_documents(raw_documents)
-    save_to_jsonl(chunked_documents, OUTPUT_FILE)
+
+def parse_pdfs_to_chunks(input_dir: str, output_file: str) -> list[Document]:
+    """
+    Load PDFs from a given directory and split them into smaller chunks.
+
+    :param input_dir: The path to the directory containing the PDFs.
+    :param output_file: The path to save the JSONL file.
+    :return: A list of Document objects, each representing a chunk of a PDF.
+    """
+    raw_documents = _parse_pdfs(input_dir)
+    chunked_documents = _split_documents(raw_documents)
+    _save_to_jsonl(chunked_documents, output_file)

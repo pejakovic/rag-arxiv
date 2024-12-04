@@ -1,38 +1,31 @@
-import arxiv
-import time
 import os
+import time
+import arxiv
 
 # Configuration
-SEARCH_QUERY = "Federated Learning"  # Keywords for the search
-DOWNLOAD_DIR = ".arxiv_papers"       # Directory to save the downloaded papers
 MAX_RESULTS = 10                     # Maximum number of results to fetch
 TIMEOUT = 5                          # Seconds to wait between downloads
 
-def create_download_dir(directory):
+def _create_download_dir(download_dir):
     """
     Ensure the download directory exists.
 
     If the directory does not exist, create it.
     """
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+    if not os.path.exists(download_dir):
+        os.makedirs(download_dir)
 
-def download_papers(query, max_results, download_dir, timeout):
+def _download_papers(query: str, max_results: int, download_dir: str, timeout: int):
     """
-    Search and download papers from ArXiv.
-
-    :param query: Keywords for the search
-    :param max_results: Maximum number of results to fetch
-    :param download_dir: Directory to save the downloaded papers
-    :param timeout: Seconds to wait between downloads
+    Helper function to download papers from arXiv based on the search query.
     """
-    create_download_dir(download_dir)
+    _create_download_dir(download_dir)
 
     # Perform the search
     print(f"Searching for papers with query: '{query}'...")
     search = arxiv.Search(
         query=query,
-        max_results=max_results,
+        max_results=max_results,  # Ensure max_results is an integer
         sort_by=arxiv.SortCriterion.SubmittedDate
     )
 
@@ -55,5 +48,13 @@ def download_papers(query, max_results, download_dir, timeout):
         else:
             print(f"Already downloaded: {title}")
 
-if __name__ == "__main__":
-    download_papers(SEARCH_QUERY, MAX_RESULTS, DOWNLOAD_DIR, TIMEOUT)
+def download_arxiv_papers(query: str, download_dir: str, max_results: int = 10, timeout: int = 5):
+    """
+    Download papers from arXiv based on the search query.
+
+    :param query: Search query for arXiv
+    :param max_results: Maximum number of results to fetch
+    :param download_dir: Directory to save the downloaded papers
+    :param timeout: Seconds to wait between downloads
+    """
+    _download_papers(query, int(max_results), download_dir, timeout)

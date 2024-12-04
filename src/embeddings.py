@@ -5,7 +5,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 
 class FAISSDatabase:
-    def __init__(self, index_file="./faiss_index", model_name="all-MiniLM-L6-v2"):
+    def __init__(self, index_file="data/faiss_index", model_name="all-MiniLM-L6-v2"):
         """
         Initialize a FAISS database for storing embeddings and metadata.
 
@@ -13,7 +13,7 @@ class FAISSDatabase:
         :param model_name: Name of the Hugging Face model used for generating embeddings.
         """
         self.index_file = index_file
-        self.embedding_model = SentenceTransformer(model_name, device="cpu")
+        self.embedding_model = SentenceTransformer(model_name) # device="cpu"
         self.index = None
         self.texts = []
         self.metadata = []
@@ -33,7 +33,7 @@ class FAISSDatabase:
         # Use HuggingFaceEmbeddings with model parameters to set device
         hf_embeddings = HuggingFaceEmbeddings(
             model_name="all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'}
+            # model_kwargs={'device': 'cpu'}
         )
         embeddings = hf_embeddings.embed_documents(self.texts)
 
@@ -65,7 +65,7 @@ class FAISSDatabase:
         # Use HuggingFaceEmbeddings with model parameters to set device
         hf_embeddings = HuggingFaceEmbeddings(
             model_name="all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'}
+            # model_kwargs={'device': 'cpu'}
         )
         self.index = FAISS.load_local(self.index_file, hf_embeddings, allow_dangerous_deserialization=True)
 
@@ -88,12 +88,7 @@ class FAISSDatabase:
         return [{"text": doc.page_content, "metadata": doc.metadata, "score": score} 
                 for doc, score in results]
 
-# Example usage
-if __name__ == "__main__":
-    db = FAISSDatabase()
-    dataset_file = "dataset.jsonl"
-    db.save_to_database(dataset_file)
-    query = "What is Federated Learning?"
-    results = db.search_index(query)
-    for result in results:
-        print(f"Text: {result['text']}\nMetadata: {result['metadata']}\n")
+    # query = "What is Federated Learning?"
+    # results = db.search_index(query)
+    # for result in results:
+    #     print(f"Text: {result['text']}\nMetadata: {result['metadata']}\n")

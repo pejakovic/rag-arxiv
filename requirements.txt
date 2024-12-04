@@ -1,7 +1,7 @@
 langchain
 faiss-cpu
 transformers
-torch
+#torch
 sentence-transformers
 typing-extensions
 python-dotenv
