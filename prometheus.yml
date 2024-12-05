@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Add this section to enable remote access
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # alertmanager:9093
+
+# Add web configuration to allow Grafana access
+web:
+  external_url: http://localhost:9090
+
+scrape_configs:
+  - job_name: 'rag_system'
+    static_configs:
+      - targets: ['localhost:8001'] 

@@ -1,7 +1,15 @@
+arxiv
+datasets
 langchain
+langchain-community
+langchain-huggingface
 faiss-cpu
 transformers
-#torch
+torch
 sentence-transformers
 typing-extensions
 python-dotenv
+prometheus-client
+fastapi
+uvicorn
+pydantic

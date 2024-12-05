@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  rag_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - RUNTIME=cpu
+    ports:
+      - "8000:8000"  # API port
+      - "8001:8001"  # Prometheus metrics port
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./models:/app/models
+    command: ["python3", "src/rag_arxiv.py", "--mode", "api"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus

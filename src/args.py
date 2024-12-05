@@ -54,9 +54,9 @@ def parse_rag_args() -> RAGArguments:
     parser.add_argument(
         "--mode",
         type=str,
-        choices=['init', 'train', 'inference'],
+        choices=['init', 'train', 'inference', 'api'],
         required=True,
-        help="Operation mode: 'init' for data collection, 'train' for fine-tuning, 'inference' for querying"
+        help="Operation mode: 'init' for data collection, 'train' for fine-tuning, 'inference' for querying, 'api' for API mode"
     )
     
     # Training related arguments

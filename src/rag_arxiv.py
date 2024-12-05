@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from time import time
 from langchain.chains import RetrievalQA
@@ -12,6 +12,13 @@ from doc_parser import parse_pdfs_to_chunks
 from finetuner import fine_tune_model
 from embeddings import FAISSDatabase
 from utils import PathManager
+from monitoring import (
+    start_metrics_server, monitor_time, monitor_errors,
+    QUERY_COUNTER, QUERY_DURATION, DOC_RETRIEVAL_DURATION, MODEL_INFERENCE_DURATION
+)
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import uvicorn
 
 # Initialize PathManager
 path_manager = PathManager()
@@ -38,6 +45,21 @@ class QueryResult:
     execution_time: float
     error: Optional[str] = None
 
+class QueryRequest(BaseModel):
+    query: str
+
+class DocumentInfo(BaseModel):
+    title: str
+    content: str
+    metadata: dict
+
+class QueryResponse(BaseModel):
+    query: str
+    response: str
+    execution_time: float
+    error: Optional[str] = None
+    source_documents: List[DocumentInfo] = []
+
 class RAGSystem:
     def __init__(self, args):
         """
@@ -59,6 +81,9 @@ class RAGSystem:
             f"max_new_tokens={args.max_new_tokens}, temperature={args.temperature}, "
             f"top_k={args.top_k}"
         )
+
+        # Start metrics server
+        start_metrics_server()
 
     def load_components(self):
         """Load all necessary components for the RAG system"""
@@ -105,15 +130,26 @@ class RAGSystem:
             self.logger.error(f"Error loading RAG components: {str(e)}")
             raise
 
+    @monitor_time(QUERY_DURATION)
+    @monitor_errors
     def ask_question(self, query: str) -> QueryResult:
         """Process a query and return the result"""
+        QUERY_COUNTER.inc()
+        
         if not self.qa_chain:
             raise ValueError("RAG system not initialized. Call load_components() first.")
             
         start_time = time()
         try:
             self.logger.info(f"Processing query: {query}")
-            result = self.qa_chain.invoke({"query": query})
+            
+            # Monitor document retrieval
+            with DOC_RETRIEVAL_DURATION.time():
+                docs = self.vectorstore.similarity_search(query, k=self.args.top_k)
+            
+            # Monitor model inference
+            with MODEL_INFERENCE_DURATION.time():
+                result = self.qa_chain.invoke({"query": query})
             
             execution_time = time() - start_time
             self.logger.info(f"Query processed in {execution_time:.2f} seconds")
@@ -176,6 +212,47 @@ def print_results(result: QueryResult):
             print(f"\n{i}. {doc.metadata.get('title', 'Unknown Title')}")
             print(f"Content: {doc.page_content[:200]}...")
 
+app = FastAPI(title="RAG System API")
+rag_instance = None
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize RAG system on startup"""
+    global rag_instance
+    args = parse_rag_args()
+    rag_instance = RAGSystem(args)
+    rag_instance.load_components()
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy"}
+
+@app.post("/query", response_model=QueryResponse)
+async def query_endpoint(request: QueryRequest):
+    """Process a RAG query"""
+    if not rag_instance:
+        raise HTTPException(status_code=500, detail="RAG system not initialized")
+    
+    result = rag_instance.ask_question(request.query)
+    
+    # Convert source documents to the expected format
+    source_docs = []
+    for doc in result.source_documents:
+        source_docs.append(DocumentInfo(
+            title=doc.metadata.get('title', 'Unknown Title'),
+            content=doc.page_content,
+            metadata=doc.metadata
+        ))
+    
+    return QueryResponse(
+        query=result.query,
+        response=result.response,
+        execution_time=result.execution_time,
+        error=result.error,
+        source_documents=source_docs
+    )
+
 def main():
     """Main function to run the RAG system"""
     args = parse_rag_args()
@@ -190,6 +267,9 @@ def main():
             db = FAISSDatabase()
             db.save_to_database(args.dataset_path)
             print("System initialization complete!")
+        elif args.mode == 'api':
+            # Start the FastAPI server
+            uvicorn.run(app, host="0.0.0.0", port=8000)
         else:  # inference mode
             rag_system = RAGSystem(args)
             rag_system.load_components()
