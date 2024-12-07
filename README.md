@@ -1,168 +1,57 @@
-# RAG System for arXiv Papers
+# 🚀 Multimodal PDF Data Extraction & RAG System
 
-A Retrieval-Augmented Generation (RAG) system that uses arXiv papers as a knowledge base, with FastAPI endpoints and Prometheus/Grafana monitoring.
-This project is a simple implementation of a RAG system for arXiv papers for educational and demonstration purposes.
+## Overview
 
-## Features
+This project implements a sophisticated Retrieval-Augmented Generation (RAG) system for extracting and analyzing multimodal PDF documents. Leveraging advanced machine learning techniques, the system can:
 
-- RAG implementation using LangChain and HuggingFace models
-- FastAPI endpoints for querying the system
-- Prometheus metrics monitoring
-- Grafana dashboards
-- Docker containerization
-- Support for both CPU and ROCm (AMD GPU) environments
+- Extract text, tables, and charts from PDFs
+- Create semantic embeddings
+- Enable intelligent querying across document collections
+
+## 🌟 Key Features
+
+- 📄 Multimodal PDF Parsing
+- 🔍 Semantic Document Retrieval
+- 🤖 AI-Powered Question Answering
+- 📊 Prometheus Metrics Monitoring
+- 🌐 FastAPI Backend
 
 ## Prerequisites
 
-- Docker and Docker Compose
-- At least 8GB RAM
-- 20GB disk space (for models and papers)
-- (Optional) AMD GPU for ROCm support
+- Python 3.10.12 (recommended)
+- pip
+- Virtual environment support
+- Tesseract OCR (optional but recommended)
 
-## Quick Start
+## Installation
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd <repository-name>
-```
-
-2. Initialize the system (download papers and create database):
-```bash
-python src/rag_arxiv.py --mode init --search-query "federated learning" --papers-dir "data/papers" --dataset-path "data/dataset.jsonl"
-```
-
-3. Train the model:
-```bash
-python src/rag_arxiv.py --mode train --dataset-path "data/dataset.jsonl" --model_output_dir "models/fine_tuned"
-```
-
-4. Run inference:
-```bash
-python src/rag_arxiv.py --mode inference --query "What is federated learning?"
-```
-
-5. Start the services using Docker Compose:
-```bash
-docker compose up -d
-```
-
-## Available Endpoints
-
-- RAG API: http://localhost:8000
-  - API Documentation: http://localhost:8000/docs
-  - Health Check: http://localhost:8000/health
-  - Query Endpoint: http://localhost:8000/query (POST)
-- Prometheus Metrics: http://localhost:8001
-- Prometheus UI: http://localhost:9090
-- Grafana: http://localhost:3000 (default login: admin/admin)
-
-## API Usage
-
-Query the RAG system:
+### 1. Set up Python environment
 
 ```bash
-curl -X POST http://localhost:8000/query \
--H "Content-Type: application/json" \
--d '{"query": "What is federated learning?"}'
+# Install correct Python version
+chmod +x setup_python.sh
+./setup_python.sh
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-## Directory Structure
+### 2. Install dependencies
 
-```
-├── data/
-│ ├── arxiv_papers/ # Downloaded papers
-│ └── dataset.jsonl # Processed data
-├── models/
-│ ├── fine_tuned/ # Fine-tuned models
-│ ├── cache/ # Transformers cache
-│ └── torch/ # PyTorch models
-├── src/
-│ ├── rag_arxiv.py # Main implementation
-│ ├── args.py # Argument parsing
-│ ├── monitoring.py # Prometheus metrics
-│ └── ...
-├── logs/ # Application logs
-├── Dockerfile
-├── docker-compose.yml
-├── prometheus.yml # Prometheus configuration
-└── requirements.txt
-```
-
-## Configuration
-
-### Environment Variables
-
-- `PYTHONPATH=/app`
-- `TRANSFORMERS_CACHE=/app/models/cache`
-- `TORCH_HOME=/app/models/torch`
-
-### Docker Configuration
-
-- CPU version: Uses `ubuntu:22.04` base image
-- ROCm version: Uses `rocm/dev-ubuntu-22.04:5.7` base image
-
-To use ROCm version:
 ```bash
-docker-compose build --build-arg RUNTIME=rocm
-```
+# Install PyTorch first
+pip install torch==2.0.1 torchvision==0.15.2 --extra-index-url https://download.pytorch.org/whl/rocm5.7
 
-
-## Monitoring
-
-The system exposes the following metrics:
-- Request counts
-- Query latency
-- Document retrieval duration
-- Model inference duration
-- Error rates
-
-Access these metrics in Grafana by:
-1. Login to Grafana (http://localhost:3000)
-2. Add Prometheus as a data source
-3. Import dashboards
-
-## Development
-
-1. Create virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate # Linux/Mac
-venv\Scripts\activate # Windows
-```
-
-2. Install dependencies:
-```bash
+# Install other dependencies
 pip install -r requirements.txt
+
+# Download spaCy model
+python -m spacy download en_core_web_sm
 ```
 
-3. Run the system:
-```bash
-python src/rag_arxiv.py --mode init --search-query "federated learning" --papers-dir "data/papers" --dataset-path "data/dataset.jsonl"
-```
-
-## Troubleshooting
-
-- If you encounter issues with the ROCm version, ensure your GPU drivers are correctly installed and compatible with the specified ROCm version.
-- Check the logs in `logs/` for any errors or warnings that might help in diagnosing the issue.
+### 3. Clone the Repository
 
 ```bash
-docker-compose logs
+git clone https://github.com/pejakovic/multimodal-rag
 ```
-
-
-2. Check individual service logs:
-```bash
-docker-compose logs rag_app
-docker-compose logs prometheus
-docker-compose logs grafana
-```
-
-3. Restart services:
-```bash
-docker-compose restart [service_name]
-```
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
